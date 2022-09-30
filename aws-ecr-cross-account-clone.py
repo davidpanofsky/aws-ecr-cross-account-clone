@@ -14,7 +14,7 @@ import json
 import re
 import subprocess
 import threading
-
+import boto3
 
 # Default values
 #
@@ -142,7 +142,7 @@ def createRepo(profile, region, repositoryName, scanOnPush=True):
   
 # Calculate age of image, in calendar days
 def imageAge(image):
-  pushedAt = re.sub("T.*", "", image['imagePushedAt'])
+  pushedAt = re.sub("T.*", "", str(image['imagePushedAt']))
   pushedDate = date.fromisoformat(pushedAt)
   return ((date.today() - pushedDate).days)
 
@@ -332,7 +332,8 @@ def repoExists(repositoryList, repositoryName):
 # returns: What AWS returns as JSON for the image, {} if does not exist
 def describeImage(profile, region, repositoryName, tag):
   debug('Retrieving metadata for image: ' + profile + ':' + region + ', ' + repositoryName + ':' + tag)
-  cmd = 'aws ecr describe-images --profile ' + profile + ' --repository-name ' + repositoryName
+  #cmd = 'aws ecr describe-images --profile ' + profile + ' --repository-name ' + repositoryName + ' --image-ids imageTag=' + tag
+  cmd = 'aws ecr describe-images --profile ' + profile + ' --repository-name ' + repositoryName + ' --query "imageDetails[?contains(imageTags,`' + tag + '`)]"'
   debug('Running command: ' + cmd)
 
   p = subprocess.Popen(cmd.split(),
@@ -350,15 +351,19 @@ def describeImage(profile, region, repositoryName, tag):
     debug(stdout)
     
   # Convert JSON text to a list
-  images = json.loads(stdout)['imageDetails']
-  for image in images:
-    if image['imageTags'][0] == tag:
-      debug('Found the image:')
-      debug(image)
-      return image
-  
-  # If such image is not found
-  return {}
+  #images = json.loads(stdout)['imageDetails']
+  images = json.loads(stdout)
+  if not images:
+      return {}
+  else:
+    for image in images:
+      if image['imageTags'][0] == tag:
+        debug('Found the image:')
+        debug(image)
+        return image
+    
+    # If such image is not found
+    return {}
   
 
   
@@ -409,13 +414,19 @@ if args.verbose_auth:
   
 debug('')
 
+src_session = boto3.Session(region_name=args.src_region, profile_name=args.src_profile)
+src_client = src_session.client('ecr')
+
+dst_session = boto3.Session(region_name=args.dst_region, profile_name=args.dst_profile)
+dst_client = dst_session.client('ecr')
+
 ####################
 # PART 2. Read ECR data and decide what to copy.
 #
 
 # Get repository list for Source repo
 info('Retrieving list of repositories in ' + args.src_profile + ':' + args.src_region)
-repoListSrc = getRepos(args.src_profile, args.src_region)
+repoListSrc = getRepos(src_client, args.src_region)
 debug(repoListSrc)
 
 # Get repository list for Destination repo
@@ -641,6 +652,7 @@ for srcImage in imagesToSync:
   dstImage = describeImage(args.dst_profile, args.dst_region, srcImage['repositoryName'], srcImage['imageTags'][0])
   
   try:
+    print(srcImage)
     srcDigest = srcImage['imageDigest']
     dstDigest = dstImage['imageDigest']
     if srcDigest != dstDigest:
@@ -672,7 +684,7 @@ class pushPullThread(threading.Thread):
     global imagesPushed
     debug('Starting thread: ' + self.name)
     dockerPull(fqdnSrc + '/' + self.imageName)
-    dockerTag(self.imageName, fqdnDst + '/' + self.imageName)
+    dockerTag(fqdnSrc + '/' + self.imageName, fqdnDst + '/' + self.imageName)
     dockerPush(fqdnDst + '/' + self.imageName)
     imagesPushed = imagesPushed + 1
     imageNamesPushed.append(self.imageName)
