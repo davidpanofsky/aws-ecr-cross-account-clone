@@ -110,9 +110,10 @@ def createRepo(profile, region, repositoryName, scanOnPush=True):
   
 # Calculate age of image, in calendar days
 def imageAge(image):
-  pushedAt = re.sub("T.*", "", str(image['imagePushedAt']))
-  pushedDate = date.fromisoformat(pushedAt)
-  return ((date.today() - pushedDate).days)
+  #pushedAt = re.sub("T.*", "", str(image['imagePushedAt']))
+  #pushedDate = date.fromisoformat(pushedAt)
+  pushedDate = image['imagePushedAt']
+  return ((date.today() - pushedDate.date()).days)
 
   
 # Retrieve credentials for ECR repository  
@@ -441,7 +442,7 @@ for repo in repoListSrc:
       try:
         tag = image['imageTags'][0]
       except (NameError, KeyError) as e:
-        info('  Found image: ' + image['repositoryName'] + ':' + image['imagePushedAt'])
+        info('  Found image: ' + image['repositoryName'] + ':' + str(image['imagePushedAt']))
         info('    Image is not tagged, skipping')
         continue
         
