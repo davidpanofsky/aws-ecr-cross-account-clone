@@ -70,30 +70,14 @@ def getRepos(session):
   
 
 # Get list of images for AWS ECR repo
-def getRepoImages(profile, region, repositoryName):
-  info('Retrieving images for repository: ' + profile + ':' + region + ':' + repositoryName)
-  cmd = 'aws ecr describe-images --profile ' + profile + ' --region ' + region + ' --repository-name ' + repositoryName
-  debug('Running command: ' + cmd)
+def getRepoImages(session, repositoryName):
+  info('Retrieving images for repository: ' + session.profile_name + ':' + session.region_name + ':' + repositoryName)
+  client = session.client('ecr')
+  #cmd = 'aws ecr describe-images --profile ' + session.profile_name + ' --region ' + session.region_name + ' --repository-name ' + repositoryName
+  response = client.describe_images(repositoryName=repositoryName)
 
-  p = subprocess.Popen(cmd.split(),
-                       stdout = subprocess.PIPE,
-                       stderr = subprocess.PIPE,
-                       #stdin  = subprocess.PIPE,
-                       universal_newlines = True)
-  stdout, stderr = p.communicate()
-
-  if p.returncode > 0:
-    # Shell error happened
-    print(stderr)
-    exit(errAWS)
-  else:
-    debug(stdout)
-  
-  # Convert JSON text to a list
-  j = json.loads(stdout)
-  
   # Return .imageDetails[] property
-  return j['imageDetails']  
+  return response['imageDetails']  
 
 
 # Create repository
@@ -447,7 +431,7 @@ info('Retrieving list of images')
 imagesToSync = []
 
 for repo in repoListSrc:
-  images = getRepoImages(args.src_profile, args.src_region, repo['repositoryName'])
+  images = getRepoImages(src_session, repo['repositoryName'])
   if len(images) == 0:
     info('  Repository is empty, skipping')
   else:
