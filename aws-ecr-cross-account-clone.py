@@ -59,28 +59,12 @@ def validate(var, regex, errMsg, exitCode):
 
 
 # Read repositories from AWS region
-def getRepos(profile, region):
-  debug('Retrieving repos: ' + profile + ':' + region)
-  cmd = 'aws ecr describe-repositories --profile ' + profile + ' --region ' + region
-  debug('Running command: ' + cmd)
+def getRepos(session):
+  debug('Retrieving repos: ' + session.profile_name + ':' + session.region_name)
+  client = session.client('ecr')
+  #cmd = 'aws ecr describe-repositories --profile ' + session.profile_name + ' --region ' + session.region_name
+  response = client.describe_repositories()
 
-  p = subprocess.Popen(cmd.split(),
-                       stdout = subprocess.PIPE,
-                       stderr = subprocess.PIPE,
-                       #stdin  = subprocess.PIPE,
-                       universal_newlines = True)
-  stdout, stderr = p.communicate()
-
-  if p.returncode > 0:
-    # Shell error happened
-    print(stderr)
-    exit(errAWS)
-  else:
-    debug(stdout)
-    
-  # Convert JSON text to a list
-  j = json.loads(stdout)
-  
   # Return .repositories[] property
   return j['repositories']
   
@@ -415,10 +399,7 @@ if args.verbose_auth:
 debug('')
 
 src_session = boto3.Session(region_name=args.src_region, profile_name=args.src_profile)
-src_client = src_session.client('ecr')
-
 dst_session = boto3.Session(region_name=args.dst_region, profile_name=args.dst_profile)
-dst_client = dst_session.client('ecr')
 
 ####################
 # PART 2. Read ECR data and decide what to copy.
@@ -426,13 +407,13 @@ dst_client = dst_session.client('ecr')
 
 # Get repository list for Source repo
 info('Retrieving list of repositories in ' + args.src_profile + ':' + args.src_region)
-repoListSrc = getRepos(src_client, args.src_region)
+repoListSrc = getRepos(src_session)
 debug(repoListSrc)
 
 # Get repository list for Destination repo
 # We need this to know if we have to create a repo pefore pushing an image
 info('Retrieving list of repositories in ' + args.dst_profile + ':' + args.dst_region)
-repoListDst = getRepos(args.dst_profile, args.dst_region)
+repoListDst = getRepos(dst_session)
 debug(repoListDst)
 info('')
 
