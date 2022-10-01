@@ -66,7 +66,7 @@ def getRepos(session):
   response = client.describe_repositories()
 
   # Return .repositories[] property
-  return j['repositories']
+  return response['repositories']
   
 
 # Get list of images for AWS ECR repo
